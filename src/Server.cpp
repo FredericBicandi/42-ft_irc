@@ -224,21 +224,25 @@ void Server::disconnectClient(int fd, const std::string &reason)
     for (std::map<std::string, Channel*>::iterator ct = _channels.begin(); ct != _channels.end();) 
     {
         Channel *ch = ct->second;
-        if (ch->isMember(fd)) 
-        {
-            std::string msg = ":" + c->getNickname() + " PART " + ch->getName() + " :Quit: " + reason + "\r\n";
-            channelBroadcast(ch, msg, -1);
-            ch->removeMember(fd);
-        }
-        if (ch->isEmpty()) 
-        {
-            // delete ch;
-            // ch =NULL;
-            std::map<std::string, Channel*>::iterator toErase = ct++;
-            _channels.erase(toErase);
-        } 
-        else
-            ++ct;
+      if (ch->isMember(fd)) 
+{
+    std::string msg = ":" + c->getNickname() + " PART " + ch->getName() + " :Quit: " + reason + "\r\n";
+    channelBroadcast(ch, msg, -1);
+    ch->removeMember(fd);
+}
+if (ch->isEmpty()) 
+{
+    // delete ch;
+    // ch =NULL;
+    std::map<std::string, Channel*>::iterator toErase = ct++;
+    _channels.erase(toErase);
+} 
+else
+{
+    ensureChannelHasOperator(ch);
+    ++ct;
+}
+
     }
     if (!c->getNickname().empty()) 
     {
@@ -311,6 +315,32 @@ void Server::serverNotice(Client *c, const std::string &text)
         return;
     std::string nick = c->getNickname().empty() ? "*" : c->getNickname();
     reply(c, ":localhost NOTICE " + nick + " :" + text + "\r\n");
+}
+
+void Server::ensureChannelHasOperator(Channel *ch)
+{
+    if (!ch) return;
+
+    const std::map<int, Client*> &m = ch->getMembers();
+    if (m.empty())
+        return;
+
+    // Check if any operator still exists
+    bool hasOp = false;
+    for (std::map<int, Client*>::const_iterator it = m.begin(); it != m.end(); ++it) {
+        if (ch->isOperator(it->first)) { hasOp = true; break; }
+    }
+    if (hasOp)
+        return;
+
+    // Promote the first member in the map as the new operator
+    int newOpFd = m.begin()->first;
+    Client *newOp = m.begin()->second;
+    ch->addOperator(newOpFd);
+
+    // Broadcast a MODE +o from the server so all clients update their userlist
+    std::string msg = ":localhost MODE " + ch->getName() + " +o " + newOp->getNickname() + "\r\n";
+    channelBroadcast(ch, msg, -1);
 }
 
 void Server::processClientCommands(Client *c) 

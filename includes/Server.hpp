@@ -65,6 +65,7 @@ class Server
     void welcomeIfReady(Client *c);
 
     // Broadcast helpers
+    void ensureChannelHasOperator(Channel *ch);
     void channelBroadcast(Channel *ch, const std::string &msg, int excludeFd);
 
     // Finders

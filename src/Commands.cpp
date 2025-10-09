@@ -152,28 +152,35 @@ void Server::handleJOIN(Client *c, const std::string &args)
     }
 
     ch->addMember(c);
-    std::string joinMsg = ":" + c->getNickname() + " JOIN " + chan + "\r\n";
-    channelBroadcast(ch, joinMsg, -1);
-    serverNotice(c, "You have joined channel " + chan + ".");
-    if (!ch->getTopic().empty()) 
-    {
-        std::ostringstream t;
-        t << c->getNickname() << " " << chan << " :" << ch->getTopic() << "\r\n";
-        reply(c, t.str());
-    }
-    std::ostringstream names;
-    names << c->getNickname() << " = " << chan << " :";
-    const std::map<int, Client*> &m = ch->getMembers();
-    for (std::map<int, Client*>::const_iterator mi = m.begin(); mi != m.end(); ++mi)
-    {
-        if (ch->isOperator(mi->first)) names << "@";
-        names << mi->second->getNickname() << " ";
-    }
-    names << "\r\n";
-    reply(c, names.str());
-    std::ostringstream end;
-    end << c->getNickname() << " " << chan << " :End of /NAMES list.\r\n";
-    reply(c, end.str());
+// RFC-ish JOIN prefix (helps some clients): nick!user@host and colon before channel
+// RFC-ish JOIN prefix (keep this)
+std::string joinMsg = ":" + c->getNickname() + "!" + c->getUsername() + "@localhost JOIN :" + chan + "\r\n";
+channelBroadcast(ch, joinMsg, -1);
+
+serverNotice(c, "You have joined channel " + chan + ".");
+
+// --- Topic numerics (send full line yourself via reply) ---
+if (ch->getTopic().empty()) {
+    reply(c, ":localhost 331 " + c->getNickname() + " " + chan + " :No topic is set\r\n");
+} else {
+    reply(c, ":localhost 332 " + c->getNickname() + " " + chan + " :" + ch->getTopic() + "\r\n");
+}
+
+// --- Names list numerics (353/366) ---
+// IMPORTANT: prefix the line with ':localhost <code> ...' and end with CRLF.
+std::ostringstream namesline;
+namesline << ":localhost 353 " << c->getNickname() << " = " << chan << " :";
+
+const std::map<int, Client*> &m = ch->getMembers();
+for (std::map<int, Client*>::const_iterator mi = m.begin(); mi != m.end(); ++mi) {
+    if (ch->isOperator(mi->first)) namesline << "@";
+    namesline << mi->second->getNickname() << " ";
+}
+namesline << "\r\n";
+reply(c, namesline.str());
+
+reply(c, ":localhost 366 " + c->getNickname() + " " + chan + " :End of /NAMES list\r\n");
+
 }
 
 void Server::handlePART(Client *c, const std::string &args)
@@ -206,6 +213,11 @@ void Server::handlePART(Client *c, const std::string &args)
         // ch = NULL;
         _channels.erase(it);
     }
+    else
+    {
+        ensureChannelHasOperator(ch);
+    }
+
 }
 
 void Server::handlePRIVMSG(Client *c, const std::string &args)
@@ -305,12 +317,18 @@ void Server::handleKICK(Client *c, const std::string &args)
     }
     std::string msg = ":" + c->getNickname() + " KICK " + chan + " " + nick + "\r\n";
     channelBroadcast(ch, msg, -1);
-    ch->removeMember(victim->getFd());
-    if (ch->isEmpty()) {
-        // delete ch;
-        // ch = NULL;
-        _channels.erase(it);
+   ch->removeMember(victim->getFd());
+if (ch->isEmpty()) 
+    {
+    // delete ch;
+    // ch = NULL;
+    _channels.erase(it);
+    } 
+else 
+    {
+    ensureChannelHasOperator(ch);
     }
+
 }
 
 void Server::handleINVITE(Client *c, const std::string &args) 
