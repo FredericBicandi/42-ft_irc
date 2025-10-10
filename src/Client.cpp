@@ -46,7 +46,6 @@ std::string Client::popNextCommand()
         endlen = 1;
     std::string line = _inbuf.substr(0, pos + endlen);
     _inbuf.erase(0, pos + endlen);
-    // strip CRLF / LF
     if (line.size() >= 2 && line.substr(line.size() -2) == "\r\n")
         line = line.substr(0, line.size() -2);
     else if (!line.empty() && line[line.size() -1] == '\n')

@@ -59,7 +59,7 @@ class Server
     void processClientCommands(Client *c);
     static void splitCommand(const std::string &line, std::string &cmd, std::string &args);
 
-    // Replies (enqueue only; actual sending occurs on POLLOUT)
+    // Replies
     void reply(Client *c, const std::string &msg);
     void outputMessage(Client *c, const std::string &msg);
     void welcomeIfReady(Client *c);

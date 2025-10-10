@@ -10,8 +10,8 @@ class Client
     int _fd;
 
     // I/O buffers
-    std::string _inbuf;               // accumulate until CRLF
-    std::deque<std::string> _outq;    // queued writes
+    std::string _inbuf;
+    std::deque<std::string> _outq;
 
     // Identity / auth
     std::string _nickname;
@@ -29,7 +29,7 @@ class Client
 
     // I/O buffering
     void appendToInbuf(const char *data, size_t length);
-    std::string popNextCommand();     // returns one line (without CRLF), or ""
+    std::string popNextCommand();
     bool hasPendingWrite() const;
     const std::string &frontWrite() const;
     void popFrontWrite();

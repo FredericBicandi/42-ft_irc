@@ -274,7 +274,9 @@ void Server::outputMessage(Client *c, const std::string &msg)
 }
 
 void Server::welcomeIfReady(Client *c) 
-{   if (!c) return;
+{   
+    if (!c) 
+        return;
     if (!c->hasPassed() || !c->hasNick() || !c->hasUser() || c->isRegistered())
         return;
     c->setRegistered(true);
@@ -333,12 +335,10 @@ void Server::ensureChannelHasOperator(Channel *ch)
     if (hasOp)
         return;
 
-    // Promote the first member in the map as the new operator
     int newOpFd = m.begin()->first;
     Client *newOp = m.begin()->second;
     ch->addOperator(newOpFd);
 
-    // Broadcast a MODE +o from the server so all clients update their userlist
     std::string msg = ":localhost MODE " + ch->getName() + " +o " + newOp->getNickname() + "\r\n";
     channelBroadcast(ch, msg, -1);
 }
@@ -389,7 +389,6 @@ void Server::processClientCommands(Client *c)
 
 void Server::handleMODE(Client *c, const std::string &args) 
 {
-    // MODE #chan +/-flags [params...]
     std::istringstream iss(args);
     std::string chan, flags; iss >> chan >> flags;
     if (chan.empty()) 
@@ -408,7 +407,6 @@ void Server::handleMODE(Client *c, const std::string &args)
 
     if (flags.empty()) 
     {
-        // For brevity, we don't list all modes; you could add 324/329 outputMessages here
         outputMessage(c, chan + " +"
             + std::string(ch->isInviteOnly() ? "i" : "")
             + std::string(ch->isTopicRestricted() ? "t" : "")

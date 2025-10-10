@@ -19,7 +19,8 @@ int main(int argc, char **argv)
     {
         Server s(port, password);
         s.run();
-    } catch (const std::exception &e) {
+    } catch (const std::exception &e) 
+    {
         std::cerr << "Fatal: " << e.what() << "\n";
         return 1;
     }

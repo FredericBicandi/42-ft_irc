@@ -55,7 +55,6 @@ void Server::handleNICK(Client *c, const std::string &args)
         return;
     }
 
-    // If changing from an existing nickname, free it
     if (!c->getNickname().empty()) 
     {
         std::map<std::string, Client*>::iterator it = _nicks.find(c->getNickname());
@@ -152,22 +151,17 @@ void Server::handleJOIN(Client *c, const std::string &args)
     }
 
     ch->addMember(c);
-// RFC-ish JOIN prefix (helps some clients): nick!user@host and colon before channel
-// RFC-ish JOIN prefix (keep this)
 std::string joinMsg = ":" + c->getNickname() + "!" + c->getUsername() + "@localhost JOIN :" + chan + "\r\n";
 channelBroadcast(ch, joinMsg, -1);
 
 serverNotice(c, "You have joined channel " + chan + ".");
 
-// --- Topic numerics (send full line yourself via reply) ---
 if (ch->getTopic().empty()) {
     reply(c, ":localhost 331 " + c->getNickname() + " " + chan + " :No topic is set\r\n");
 } else {
     reply(c, ":localhost 332 " + c->getNickname() + " " + chan + " :" + ch->getTopic() + "\r\n");
 }
 
-// --- Names list numerics (353/366) ---
-// IMPORTANT: prefix the line with ':localhost <code> ...' and end with CRLF.
 std::ostringstream namesline;
 namesline << ":localhost 353 " << c->getNickname() << " = " << chan << " :";
 
@@ -370,7 +364,7 @@ void Server::handleINVITE(Client *c, const std::string &args)
     // Notify target
     std::string msg = ":" + c->getNickname() + " INVITE " + nick + " :" + chan + "\r\n";
     reply(t, msg);
-    outputMessage(c, nick + " " + chan); // RPL_INVITING
+    outputMessage(c, nick + " " + chan);
 }
 
 void Server::handleTOPIC(Client *c, const std::string &args) 

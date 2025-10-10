@@ -23,7 +23,7 @@ class Channel
     std::string _key;                  // +k (empty => no key)
     int _userLimit;                    // +l (-1 => unlimited)
 
-    std::set<int> _invited;            // fds invited (for +i)
+    std::set<int> _invited;            // fds invited (+i)
 
   public:
     Channel(const std::string &name);
