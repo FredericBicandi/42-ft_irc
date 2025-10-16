@@ -15,31 +15,40 @@ void Server::setNonBlocking(int fd)
     // int flags = fcntl(fd, F_GETFL, 0);
     // if (flags == -1) 
     //     flags = 0;
-    fcntl(fd, F_SETFL,/*flags |*/  O_NONBLOCK);
+    fcntl(fd, F_SETFL, O_NONBLOCK);
 }
 
 void Server::setupServer() 
 {
+    int yes;
+    
+    // Opening Sockets with IPV4 and TCP Protocol
     _serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (_serverFd < 0) 
         throw std::runtime_error("socket() failed");
 
-    int yes = 1;
+    // Clean Bind ports upon suspend ctrl + z To reuse it
+    yes = 1;
     setsockopt(_serverFd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+
+    // Init a struct IPV4,Interface,port
     sockaddr_in addr;
     std::memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(_port);
+
+    // binding the socket (serverfd) to the ip + port, and waiting for connections
     if (bind(_serverFd, (sockaddr*)&addr, sizeof(addr)) < 0)
         throw std::runtime_error("bind() failed");
     if (listen(_serverFd, SOMAXCONN) < 0)
         throw std::runtime_error("listen() failed");
-    setNonBlocking(_serverFd);
+     setNonBlocking(_serverFd);
 }
 
 void Server::addPollFd(int fd, short events) 
 {
+    // we are creating a vector to monitor events of the server and the clients
     pollfd p;
     p.fd = fd; 
     p.events = events; 
@@ -76,11 +85,14 @@ void Server::removePollFd(int fd)
 
 void Server::run() 
 {
+    // setting running flag and monitoring server + client
     _running = true;
     addPollFd(_serverFd, POLLIN);
     std::cout << "ircserv listening on " << _port << std::endl;
+
     while (_running) 
     {
+        //nb of file descriptor that are ready
         int eventsReady = poll(&_pollFds[0], _pollFds.size(), -1);
         if (eventsReady < 0) 
         {
@@ -88,6 +100,7 @@ void Server::run()
                 std::cerr << "poll() error\n";
             break;
         }
+
         for (size_t i = 0; i < _pollFds.size(); ++i) 
         {
             int fd = _pollFds[i].fd;
