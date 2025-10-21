@@ -34,44 +34,36 @@ class Server
     int _serverFd;
     bool _running;
 
-    std::vector<pollfd> _pollFds;             // 0 = listen, rest = clients
-    std::map<int, Client*> _clients;          // fd -> Client*
-    std::map<std::string, Channel*> _channels;// name -> Channel*
-    std::map<std::string, Client*> _nicks;    // nick -> Client* (unique)
+    std::vector<pollfd> _pollFds;
+    std::map<int, Client*> _clients;
+    std::map<std::string, Channel*> _channels;
+    std::map<std::string, Client*> _nicks;
 
-    // Setup
     void setupServer();
     static void setNonBlocking(int fd);
     void serverNotice(Client *c, const std::string &msg);
 
-    // Poll helpers
     void addPollFd(int fd, short events);
     void modPollEvents(int fd, short eventsAdd, short eventsRemove);
     void removePollFd(int fd);
 
-    // Client lifecycle
     void acceptNewClient();
     void handleClientReadable(int fd);
     void handleClientWritable(int fd);
     void disconnectClient(int fd, const std::string &reason);
 
-    // Command dispatch
     void processClientCommands(Client *c);
     static void splitCommand(const std::string &line, std::string &cmd, std::string &args);
 
-    // Replies
     void reply(Client *c, const std::string &msg);
     void outputMessage(Client *c, const std::string &msg);
     void welcomeIfReady(Client *c);
 
-    // Broadcast helpers
     void ensureChannelHasOperator(Channel *ch);
     void channelBroadcast(Channel *ch, const std::string &msg, int excludeFd);
 
-    // Finders
     Client* findByNick(const std::string &nick);
 
-    // Handlers
     void handlePASS(Client *c, const std::string &args);
     void handleNICK(Client *c, const std::string &args);
     void handleUSER(Client *c, const std::string &args);

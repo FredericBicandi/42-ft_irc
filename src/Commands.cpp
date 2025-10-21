@@ -1,200 +1,209 @@
 #include "Server.hpp"
 
 void Server::handlePASS(Client *c, const std::string &args)
- {
+{
     if (c->isRegistered())
-    { 
-        outputMessage(c,":You may not re-register"); 
-        return; 
-    }
-    if (args.empty()) 
     {
-        outputMessage(c, "PASS :Not enough parameters"); 
+        outputMessage(c, ":You may not re-register");
+        return;
+    }
+    if (args.empty())
+    {
+        outputMessage(c, "PASS :Not enough parameters");
         serverNotice(c, "PASS command requires a parameter.");
-        return; 
+        return;
     }
 
     std::string pass = args;
-    if (!pass.empty() && pass[0] == ':') pass = pass.substr(1);
-    if (pass == _password) 
+    if (!pass.empty() && pass[0] == ':')
+        pass = pass.substr(1);
+    if (pass == _password)
     {
         c->markPassed();
         serverNotice(c, "Password accepted.");
-    } 
-    else 
+    }
+    else
     {
-        outputMessage(c,":Password incorrect");
+        outputMessage(c, ":Password incorrect");
         serverNotice(c, "Incorrect password.");
     }
 }
 
-void Server::handleNICK(Client *c, const std::string &args) 
+void Server::handleNICK(Client *c, const std::string &args)
 {
-    if (args.empty()) 
-    { 
-        outputMessage(c, ":No nickname given"); 
-        return; 
+    if (args.empty())
+    {
+        outputMessage(c, ":No nickname given");
+        return;
     }
     std::string nick = args;
     // trim trailing spaces
-    while (!nick.empty() && (nick[nick.size()-1] == ' ')) nick.erase(nick.size()-1, 1);
+    while (!nick.empty() && (nick[nick.size() - 1] == ' '))
+        nick.erase(nick.size() - 1, 1);
 
     // no spaces, commas
-    for (size_t i = 0; i < nick.size(); ++i) 
+    for (size_t i = 0; i < nick.size(); ++i)
     {
-        if (nick[i] <= 0x20 || nick[i] == ',' || nick[i] == 0x7F) 
+        if (nick[i] <= 0x20 || nick[i] == ',' || nick[i] == 0x7F)
         {
             outputMessage(c, nick + " :Erroneous nickname");
             return;
         }
     }
     Client *conflict = findByNick(nick);
-    if (conflict && conflict != c) 
+    if (conflict && conflict != c)
     {
         outputMessage(c, nick + " :Nickname is already in use");
         return;
     }
 
-    if (!c->getNickname().empty()) 
+    if (!c->getNickname().empty())
     {
-        std::map<std::string, Client*>::iterator it = _nicks.find(c->getNickname());
-        if (it != _nicks.end() && it->second == c) 
+        std::map<std::string, Client *>::iterator it = _nicks.find(c->getNickname());
+        if (it != _nicks.end() && it->second == c)
             _nicks.erase(it);
     }
     c->setNickname(nick);
     _nicks[nick] = c;
 }
 
-void Server::handleUSER(Client *c, const std::string &args) 
+void Server::handleUSER(Client *c, const std::string &args)
 {
-    if (c->isRegistered()) 
-    { 
-        outputMessage(c, ":You may not reregister"); 
-        return; 
+    if (c->isRegistered())
+    {
+        outputMessage(c, ":You may not reregister");
+        return;
     }
     std::istringstream iss(args);
     std::string user, mode, unused, trailing;
     iss >> user >> mode >> unused;
     std::getline(iss, trailing);
-    if (!trailing.empty() && trailing[0] == ' ') 
-        trailing.erase(0,1);
+    if (!trailing.empty() && trailing[0] == ' ')
+        trailing.erase(0, 1);
     if (!trailing.empty() && trailing[0] == ':')
-        trailing.erase(0,1);
+        trailing.erase(0, 1);
     if (user.empty())
-    { 
+    {
         outputMessage(c, "USER :Not enough parameters");
         return;
     }
     c->setUsername(user, trailing);
 }
 
-void Server::handleJOIN(Client *c, const std::string &args) 
+void Server::handleJOIN(Client *c, const std::string &args)
 {
-    if (!c->isRegistered()) 
-    { 
-        outputMessage(c, ":You have not registered"); 
-        return; 
+    if (!c->isRegistered())
+    {
+        outputMessage(c, ":You have not registered");
+        return;
     }
     if (args.empty())
-    { 
+    {
         outputMessage(c, "JOIN :Not enough parameters");
         return;
     }
     std::istringstream iss(args);
-    std::string chan; iss >> chan;
-    std::string key; iss >> key;
+    std::string chan;
+    iss >> chan;
+    std::string key;
+    iss >> key;
 
-    if (chan.empty() || chan[0] != '#') 
+    if (chan.empty() || chan[0] != '#')
     {
-        outputMessage(c, ":Bad Channel Mask"); 
-        return; 
+        outputMessage(c, ":Bad Channel Mask");
+        return;
     }
 
     Channel *ch = NULL;
-    std::map<std::string, Channel*>::iterator it = _channels.find(chan);
-    if (it == _channels.end()) 
+    std::map<std::string, Channel *>::iterator it = _channels.find(chan);
+    if (it == _channels.end())
     {
         ch = new Channel(chan);
         _channels[chan] = ch;
         ch->addOperator(c->getFd()); // creator gets op
-    } 
+    }
     else
         ch = it->second;
 
-    if (ch->isMember(c->getFd())) 
-    { 
+    if (ch->isMember(c->getFd()))
+    {
         serverNotice(c, "You are already on channel " + chan);
         outputMessage(c, chan + " :is already on channel");
-        return; 
+        return;
     }
 
-    if (ch->isInviteOnly() && !ch->isInvited(c->getFd())) 
+    if (ch->isInviteOnly() && !ch->isInvited(c->getFd()))
     {
         serverNotice(c, "JOIN " + chan + " failed: Invite only channel");
         outputMessage(c, chan + " :Invite only channel");
         return;
     }
-    if (ch->hasKey()) 
+    if (ch->hasKey())
     {
-        if (key != ch->getKey()) 
+        if (key != ch->getKey())
         {
-            serverNotice(c, "JOIN " + chan + " failed: Incorrect password"); 
+            serverNotice(c, "JOIN " + chan + " failed: Incorrect password");
             outputMessage(c, chan + " :Cannot join channel (+k)");
-            return; 
+            return;
         }
     }
-    if (ch->isFull()) 
+    if (ch->isFull())
     {
-        serverNotice(c, "JOIN " + chan + " failed: Channel is full");   
-        outputMessage(c, chan + " :Channel is full"); 
-        return; 
+        serverNotice(c, "JOIN " + chan + " failed: Channel is full");
+        outputMessage(c, chan + " :Channel is full");
+        return;
     }
 
     ch->addMember(c);
-std::string joinMsg = ":" + c->getNickname() + "!" + c->getUsername() + "@localhost JOIN :" + chan + "\r\n";
-channelBroadcast(ch, joinMsg, -1);
+    std::string joinMsg = ":" + c->getNickname() + "!" + c->getUsername() + "@localhost JOIN :" + chan + "\r\n";
+    channelBroadcast(ch, joinMsg, -1);
 
-serverNotice(c, "You have joined channel " + chan + ".");
+    serverNotice(c, "You have joined channel " + chan + ".");
 
-if (ch->getTopic().empty()) {
-    reply(c, ":localhost 331 " + c->getNickname() + " " + chan + " :No topic is set\r\n");
-} else {
-    reply(c, ":localhost 332 " + c->getNickname() + " " + chan + " :" + ch->getTopic() + "\r\n");
-}
+    if (ch->getTopic().empty())
+    {
+        reply(c, ":localhost 331 " + c->getNickname() + " " + chan + " :No topic is set\r\n");
+    }
+    else
+    {
+        reply(c, ":localhost 332 " + c->getNickname() + " " + chan + " :" + ch->getTopic() + "\r\n");
+    }
 
-std::ostringstream namesline;
-namesline << ":localhost 353 " << c->getNickname() << " = " << chan << " :";
+    std::ostringstream namesline;
+    namesline << ":localhost 353 " << c->getNickname() << " = " << chan << " :";
 
-const std::map<int, Client*> &m = ch->getMembers();
-for (std::map<int, Client*>::const_iterator mi = m.begin(); mi != m.end(); ++mi) {
-    if (ch->isOperator(mi->first)) namesline << "@";
-    namesline << mi->second->getNickname() << " ";
-}
-namesline << "\r\n";
-reply(c, namesline.str());
+    const std::map<int, Client *> &m = ch->getMembers();
+    for (std::map<int, Client *>::const_iterator mi = m.begin(); mi != m.end(); ++mi)
+    {
+        if (ch->isOperator(mi->first))
+            namesline << "@";
+        namesline << mi->second->getNickname() << " ";
+    }
+    namesline << "\r\n";
+    reply(c, namesline.str());
 
-reply(c, ":localhost 366 " + c->getNickname() + " " + chan + " :End of /NAMES list\r\n");
-
+    reply(c, ":localhost 366 " + c->getNickname() + " " + chan + " :End of /NAMES list\r\n");
 }
 
 void Server::handlePART(Client *c, const std::string &args)
 {
     std::istringstream iss(args);
-    std::string chan; iss >> chan;
+    std::string chan;
+    iss >> chan;
     if (chan.empty())
-    { 
+    {
         outputMessage(c, "PART :Not enough parameters");
-        return; 
+        return;
     }
-    std::map<std::string, Channel*>::iterator it = _channels.find(chan);
+    std::map<std::string, Channel *>::iterator it = _channels.find(chan);
     if (it == _channels.end())
-    { 
+    {
         outputMessage(c, chan + " :No such channel");
         return;
     }
     Channel *ch = it->second;
     if (!ch->isMember(c->getFd()))
-    { 
+    {
         outputMessage(c, chan + " :You're not on that channel");
         return;
     }
@@ -203,7 +212,7 @@ void Server::handlePART(Client *c, const std::string &args)
     ch->removeMember(c->getFd());
     if (ch->isEmpty())
     {
-        // delete ch;
+        delete ch;
         // ch = NULL;
         _channels.erase(it);
     }
@@ -211,24 +220,25 @@ void Server::handlePART(Client *c, const std::string &args)
     {
         ensureChannelHasOperator(ch);
     }
-
 }
 
 void Server::handlePRIVMSG(Client *c, const std::string &args)
 {
     if (!c->isRegistered())
-    { 
+    {
         outputMessage(c, ":You have not registered");
         return;
     }
     // target :trailing text
     std::istringstream iss(args);
-    std::string target; iss >> target;
-    std::string trailing; std::getline(iss, trailing);
+    std::string target;
+    iss >> target;
+    std::string trailing;
+    std::getline(iss, trailing);
     if (!trailing.empty() && trailing[0] == ' ')
-        trailing.erase(0,1);
+        trailing.erase(0, 1);
     if (!trailing.empty() && trailing[0] == ':')
-        trailing.erase(0,1);
+        trailing.erase(0, 1);
     if (target.empty() || trailing.empty())
     {
         outputMessage(c, "PRIVMSG :Not enough parameters");
@@ -237,25 +247,25 @@ void Server::handlePRIVMSG(Client *c, const std::string &args)
     std::string full = ":" + c->getNickname() + " PRIVMSG " + target + " :" + trailing + "\r\n";
     if (!target.empty() && target[0] == '#')
     {
-        std::map<std::string, Channel*>::iterator it = _channels.find(target);
+        std::map<std::string, Channel *>::iterator it = _channels.find(target);
         if (it == _channels.end())
-        { 
+        {
             outputMessage(c, target + " :No such channel");
             return;
         }
         Channel *ch = it->second;
         if (!ch->isMember(c->getFd()))
-        { 
+        {
             outputMessage(c, target + " :Cannot send to channel");
             return;
         }
         channelBroadcast(ch, full, c->getFd());
-    } 
+    }
     else
     {
         Client *to = findByNick(target);
         if (!to)
-        { 
+        {
             outputMessage(c, target + " :No such nick");
             return;
         }
@@ -267,7 +277,7 @@ void Server::handlePING(Client *c, const std::string &args)
 {
     std::string token = args;
     if (!token.empty() && token[0] == ':')
-        token.erase(0,1);
+        token.erase(0, 1);
     if (token.empty())
         token = "ping";
     reply(c, "PONG :" + token + "\r\n");
@@ -277,14 +287,14 @@ void Server::handleQUIT(Client *c, const std::string &args)
 {
     std::string reason = args;
     if (!reason.empty() && reason[0] == ':')
-        reason.erase(0,1);
+        reason.erase(0, 1);
     if (reason.empty())
         reason = "Client Quit";
     // Inform channels
-    for (std::map<std::string, Channel*>::iterator ct = _channels.begin(); ct != _channels.end(); ++ct) 
+    for (std::map<std::string, Channel *>::iterator ct = _channels.begin(); ct != _channels.end(); ++ct)
     {
         Channel *ch = ct->second;
-        if (ch->isMember(c->getFd())) 
+        if (ch->isMember(c->getFd()))
         {
             std::string msg = ":" + c->getNickname() + " QUIT :" + reason + "\r\n";
             channelBroadcast(ch, msg, c->getFd());
@@ -296,116 +306,134 @@ void Server::handleQUIT(Client *c, const std::string &args)
 void Server::handleKICK(Client *c, const std::string &args)
 {
     std::istringstream iss(args);
-    std::string chan, nick; iss >> chan >> nick;
-    if (chan.empty() || nick.empty()) { outputMessage(c, "KICK :Not enough parameters"); return; }
-    std::map<std::string, Channel*>::iterator it = _channels.find(chan);
-    if (it == _channels.end()) { outputMessage(c, chan + " :No such channel"); return; }
+    std::string chan, nick;
+    iss >> chan >> nick;
+    if (chan.empty() || nick.empty())
+    {
+        outputMessage(c, "KICK :Not enough parameters");
+        return;
+    }
+    std::map<std::string, Channel *>::iterator it = _channels.find(chan);
+    if (it == _channels.end())
+    {
+        outputMessage(c, chan + " :No such channel");
+        return;
+    }
     Channel *ch = it->second;
-    if (!ch->isMember(c->getFd())) { outputMessage(c, chan + " :You're not on that channel"); return; }
-    if (!ch->isOperator(c->getFd())) { outputMessage(c, chan + " :You're not channel operator"); return; }
+    if (!ch->isMember(c->getFd()))
+    {
+        outputMessage(c, chan + " :You're not on that channel");
+        return;
+    }
+    if (!ch->isOperator(c->getFd()))
+    {
+        outputMessage(c, chan + " :You're not channel operator");
+        return;
+    }
 
     Client *victim = findByNick(nick);
-    if (!victim || !ch->isMember(victim->getFd())) {
+    if (!victim || !ch->isMember(victim->getFd()))
+    {
         outputMessage(c, nick + " " + chan + " :They aren't on that channel");
         return;
     }
     std::string msg = ":" + c->getNickname() + " KICK " + chan + " " + nick + "\r\n";
     channelBroadcast(ch, msg, -1);
-   ch->removeMember(victim->getFd());
-if (ch->isEmpty()) 
+    ch->removeMember(victim->getFd());
+    if (ch->isEmpty())
     {
-    // delete ch;
-    // ch = NULL;
-    _channels.erase(it);
-    } 
-else 
-    {
-    ensureChannelHasOperator(ch);
+        // delete ch;
+        // ch = NULL;
+        _channels.erase(it);
     }
-
+    else
+    {
+        ensureChannelHasOperator(ch);
+    }
 }
 
-void Server::handleINVITE(Client *c, const std::string &args) 
+void Server::handleINVITE(Client *c, const std::string &args)
 {
     std::istringstream iss(args);
-    std::string nick, chan; iss >> nick >> chan;
-    if (nick.empty() || chan.empty()) 
-    { 
-        outputMessage(c,"INVITE :Not enough parameters"); 
-        return; 
+    std::string nick, chan;
+    iss >> nick >> chan;
+    if (nick.empty() || chan.empty())
+    {
+        outputMessage(c, "INVITE :Not enough parameters");
+        return;
     }
 
-    std::map<std::string, Channel*>::iterator it = _channels.find(chan);
-    if (it == _channels.end()) 
-    { 
+    std::map<std::string, Channel *>::iterator it = _channels.find(chan);
+    if (it == _channels.end())
+    {
         outputMessage(c, chan + " :No such channel");
-        return; 
+        return;
     }
     Channel *ch = it->second;
 
-    if (!ch->isMember(c->getFd())) 
+    if (!ch->isMember(c->getFd()))
     {
-        outputMessage(c,chan + " :You're not on that channel"); 
-        return; 
+        outputMessage(c, chan + " :You're not on that channel");
+        return;
     }
     if (!ch->isOperator(c->getFd()))
-    { 
+    {
         outputMessage(c, chan + " :You're not channel operator");
         return;
     }
 
     Client *t = findByNick(nick);
-    if (!t) 
-    { 
+    if (!t)
+    {
         outputMessage(c, nick + " :No such nick");
-        return; 
+        return;
     }
     ch->inviteUser(t->getFd());
-    // Notify target
     std::string msg = ":" + c->getNickname() + " INVITE " + nick + " :" + chan + "\r\n";
     reply(t, msg);
     outputMessage(c, nick + " " + chan);
 }
 
-void Server::handleTOPIC(Client *c, const std::string &args) 
+void Server::handleTOPIC(Client *c, const std::string &args)
 {
     std::istringstream iss(args);
-    std::string chan; iss >> chan;
-    if (chan.empty()) 
-    { 
+    std::string chan;
+    iss >> chan;
+    if (chan.empty())
+    {
         outputMessage(c, "TOPIC :Not enough parameters");
         return;
     }
-    std::map<std::string, Channel*>::iterator it = _channels.find(chan);
-    if (it == _channels.end()) 
-    { 
-        outputMessage(c, chan + " :No such channel"); 
-        return; 
+    std::map<std::string, Channel *>::iterator it = _channels.find(chan);
+    if (it == _channels.end())
+    {
+        outputMessage(c, chan + " :No such channel");
+        return;
     }
     Channel *ch = it->second;
 
-    if (!ch->isMember(c->getFd())) 
-    { 
-        outputMessage(c, chan + " :You're not on that channel"); 
+    if (!ch->isMember(c->getFd()))
+    {
+        outputMessage(c, chan + " :You're not on that channel");
         return;
     }
 
-    std::string trailing; std::getline(iss, trailing);
+    std::string trailing;
+    std::getline(iss, trailing);
     if (!trailing.empty() && trailing[0] == ' ')
-        trailing.erase(0,1);
-    if (trailing.empty()) 
+        trailing.erase(0, 1);
+    if (trailing.empty())
     {
-        // Show topic
+        //show topic
         std::ostringstream t;
         t << c->getNickname() << " " << chan << " :" << ch->getTopic() << "\r\n";
         reply(c, t.str());
         return;
     }
     if (!trailing.empty() && trailing[0] == ':')
-        trailing.erase(0,1);
+        trailing.erase(0, 1);
 
-    // Set topic
-    if (ch->isTopicRestricted() && !ch->isOperator(c->getFd())) 
+    if (ch->isTopicRestricted() && !ch->isOperator(c->getFd()))
     {
         outputMessage(c, chan + " :You're not channel operator");
         return;

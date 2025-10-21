@@ -9,11 +9,9 @@ class Client
   private:
     int _fd;
 
-    // I/O buffers
     std::string _inbuf;
     std::deque<std::string> _outq;
 
-    // Identity / auth
     std::string _nickname;
     std::string _username;
     std::string _realname;
@@ -27,7 +25,6 @@ class Client
     Client(int clientFd);
     ~Client();
 
-    // I/O buffering
     void appendToInbuf(const char *data, size_t length);
     std::string popNextCommand();
     bool hasPendingWrite() const;
@@ -35,10 +32,8 @@ class Client
     void popFrontWrite();
     void queueWrite(const std::string &msg);
 
-    // Fd
     int getFd() const;
 
-    // Auth & identity
     void markPassed() { _passed = true; }
     bool hasPassed() const { return _passed; }
 

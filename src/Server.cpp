@@ -128,30 +128,25 @@ void Server::run()
     }
 }
 
-void Server::stop()
-{
-    if (!_running)
-        return;
+void Server::stop() {
+    if (!_running) return;
     _running = false;
-    for (std::map<int, Client *>::iterator it = _clients.begin(); it != _clients.end(); ++it)
-    {
+
+    for (std::map<int, Client*>::iterator it = _clients.begin();
+         it != _clients.end(); ++it) {
         close(it->first);
-        // delete it->second;
-        // it->second = NULL;
+        delete it->second;     // <-- free client objects
     }
     _clients.clear();
     _nicks.clear();
-    for (std::map<std::string, Channel *>::iterator ct = _channels.begin(); ct != _channels.end(); ++ct)
-    {
-        // delete ct->second;
-        // ct->second = NULL;
+
+    for (std::map<std::string, Channel*>::iterator ct = _channels.begin();
+         ct != _channels.end(); ++ct) {
+        delete ct->second;     // <-- free channel objects
     }
     _channels.clear();
-    if (_serverFd >= 0)
-    {
-        close(_serverFd);
-        _serverFd = -1;
-    }
+
+    if (_serverFd >= 0) { close(_serverFd); _serverFd = -1; }
     _pollFds.clear();
 }
 
@@ -188,7 +183,7 @@ void Server::handleClientReadable(int fd)
         disconnectClient(fd, "recv error");
         return;
     }
-    c->appendToInbuf(buf, (size_t)bytesRead); //must check
+    c->appendToInbuf(buf, (size_t)bytesRead); // must check
     processClientCommands(c);
 }
 
@@ -265,7 +260,7 @@ void Server::disconnectClient(int fd, const std::string &reason)
     }
     removePollFd(fd);
     close(fd);
-    // delete c;
+    delete c;
     // c = NULL;
     _clients.erase(it);
 }
